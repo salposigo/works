@@ -55,58 +55,53 @@ if 'corp_df' not in st.session_state:
 
 corp_df = st.session_state.corp_df
 
-# 선택된 기업 저장 상태 변수 초기화
+# 상태 변수 초기화
 if 'selected_corp' not in st.session_state:
     st.session_state.selected_corp = None
-if 'selected_name' not in st.session_state:
-    st.session_state.selected_name = None
-
-# 선택 초기화 버튼
-if st.button("🔄 선택된 기업 초기화"):
-    st.session_state.selected_corp = None
-    st.session_state.selected_name = None
+if 'candidate_df' not in st.session_state:
+    st.session_state.candidate_df = pd.DataFrame()
 
 # 공시자료 조회 트리거
 run_query = st.button("🔍 공시자료 조회")
 
-if run_query or st.session_state.selected_corp is not None:
+if run_query:
     match_df = corp_df[(corp_df['stock_code'] == stock_input) | (corp_df['corp_name'].str.contains(stock_input))]
 
     if match_df.empty:
         st.error("❌ 해당 종목코드 또는 기업명을 찾을 수 없습니다.")
         st.session_state.selected_corp = None
-        st.session_state.selected_name = None
-    elif len(match_df) > 1 and st.session_state.selected_corp is None:
-        st.session_state.selected_name = st.selectbox("⚠️ 유사한 기업이 여러 개 있습니다. 하나를 선택하세요:", options=match_df['corp_name'].tolist(), index=0, key="selectbox")
-        if st.button("✅ 선택한 기업으로 조회"):
-            selected_row = match_df[match_df['corp_name'] == st.session_state.selected_name].iloc[0]
-            st.session_state.selected_corp = selected_row
-    elif st.session_state.selected_corp is None:
+        st.session_state.candidate_df = pd.DataFrame()
+    elif len(match_df) > 1:
+        st.session_state.candidate_df = match_df
+        selected_name = st.selectbox("⚠️ 유사한 기업이 여러 개 있습니다. 하나를 선택하세요:", options=match_df['corp_name'].tolist(), key='selectbox')
+        selected_row = match_df[match_df['corp_name'] == selected_name].iloc[0]
+        st.session_state.selected_corp = selected_row
+    else:
         st.session_state.selected_corp = match_df.iloc[0]
 
-    if st.session_state.selected_corp is not None:
-        corp_code = st.session_state.selected_corp['corp_code']
-        corp_name = st.session_state.selected_corp['corp_name']
-        st.info(f"✅ 조회 대상: {corp_name} ({stock_input})")
+if st.session_state.selected_corp is not None:
+    corp_code = st.session_state.selected_corp['corp_code']
+    corp_name = st.session_state.selected_corp['corp_name']
+    st.info(f"✅ 조회 대상: {corp_name} ({st.session_state.selected_corp['stock_code']})")
 
-        bgn_de = start_date.strftime('%Y%m%d')
-        end_de = end_date.strftime('%Y%m%d')
-        report_tp = report_type[1]
+    bgn_de = start_date.strftime('%Y%m%d')
+    end_de = end_date.strftime('%Y%m%d')
+    report_tp = report_type[1]
 
-        with st.spinner("📡 DART로부터 데이터 수신 중..."):
-            result = get_report_list(corp_code, bgn_de, end_de, report_tp)
+    with st.spinner("📡 DART로부터 데이터 수신 중..."):
+        result = get_report_list(corp_code, bgn_de, end_de, report_tp)
 
-        if result.get("status") == "013":
-            st.warning("❌ 해당 기간에 제출된 공시가 없습니다.")
-        elif result.get("status") != "000":
-            st.error(f"🚫 오류 발생: {result.get('message')}")
-        else:
-            report_df = pd.DataFrame(result['list'])
-            report_df = report_df[['rcept_no', 'report_nm', 'rcept_dt', 'flr_nm', 'rm']]
-            report_df['접수일'] = pd.to_datetime(report_df['rcept_dt'])
-            report_df['공시링크'] = report_df['rcept_no'].apply(lambda x: f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={x}")
-            st.success(f"📄 총 {len(report_df)}건의 보고서가 조회되었습니다.")
-            st.dataframe(report_df[['접수일', 'report_nm', 'flr_nm', '공시링크']], use_container_width=True)
+    if result.get("status") == "013":
+        st.warning("❌ 해당 기간에 제출된 공시가 없습니다.")
+    elif result.get("status") != "000":
+        st.error(f"🚫 오류 발생: {result.get('message')}")
+    else:
+        report_df = pd.DataFrame(result['list'])
+        report_df = report_df[['rcept_no', 'report_nm', 'rcept_dt', 'flr_nm', 'rm']]
+        report_df['접수일'] = pd.to_datetime(report_df['rcept_dt'])
+        report_df['공시링크'] = report_df['rcept_no'].apply(lambda x: f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={x}")
+        st.success(f"📄 총 {len(report_df)}건의 보고서가 조회되었습니다.")
+        st.dataframe(report_df[['접수일', 'report_nm', 'flr_nm', '공시링크']], use_container_width=True)
 
-            csv = report_df.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("⬇️ 보고서 목록 CSV 다운로드", data=csv, file_name=f"{corp_name}_dart_reports.csv")
+        csv = report_df.to_csv(index=False).encode('utf-8-sig')
+        st.download_button("⬇️ 보고서 목록 CSV 다운로드", data=csv, file_name=f"{corp_name}_dart_reports.csv")
