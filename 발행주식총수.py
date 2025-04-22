@@ -11,7 +11,7 @@ stock_input = st.text_input("조회할 종목명 또는 종목코드 (예: 삼�
 year_input = st.text_input("조회할 연도 (예: 2021)", value="2021")
 year = year_input if re.match(r'^\d{4}$', year_input) else '2021'
 
-# 📆 마지막 영업일 계산 함수 (시장 전체 종목 기준)
+# 📆 마지막 영업일 계산 함수
 def get_last_trading_day(year):
     try:
         tickers = stock.get_market_ticker_list(f"{year}1231", market="KOSPI")
@@ -23,7 +23,7 @@ def get_last_trading_day(year):
         pass
     return None
 
-# 📦 종목명 또는 코드 일치/유사 검색 함수
+# 종목 유사 검색 함수
 def find_candidates(user_input):
     tickers = stock.get_market_ticker_list(market='ALL')
     results = []
@@ -34,39 +34,43 @@ def find_candidates(user_input):
             results.append((code, name))
     return results
 
+# ✅ 상태 관리: candidates 저장
+if "candidates" not in st.session_state:
+    st.session_state.candidates = []
+if "selected_code" not in st.session_state:
+    st.session_state.selected_code = None
+if "stock_name" not in st.session_state:
+    st.session_state.stock_name = None
+
 # 🔍 조회 버튼
-if st.button("🔍 조회하기"):
+if st.button("🔍 종목 검색"):
+    candidates = find_candidates(stock_input.strip())
+    if not candidates:
+        st.error("❌ 해당 입력과 일치하는 종목을 찾을 수 없습니다.")
+    else:
+        st.session_state.candidates = candidates
 
-    try:
-        candidates = find_candidates(stock_input.strip())
+# ✅ 종목 선택 단계
+if st.session_state.candidates:
+    options = [f"{name} ({code})" for code, name in st.session_state.candidates]
+    choice = st.selectbox("🧩 선택할 종목을 고르세요:", options)
 
-        if not candidates:
-            st.error("❌ 해당 입력과 일치하는 종목을 찾을 수 없습니다.")
+    selected_code = choice.split('(')[-1].replace(')', '').strip()
+    stock_name = choice.split('(')[0].strip()
+
+    st.session_state.selected_code = selected_code
+    st.session_state.stock_name = stock_name
+
+# ✅ 최종 조회
+if st.session_state.selected_code and st.button("📊 발행주식총수 조회"):
+    end_date = get_last_trading_day(year)
+    if not end_date:
+        st.warning(f"❌ {year}년의 마지막 영업일을 확인할 수 없습니다.")
+    else:
+        cap_df = stock.get_market_cap_by_date(end_date, end_date, st.session_state.selected_code)
+        if cap_df.empty:
+            st.warning(f"❌ {year}년 ({end_date}) 기준 데이터가 존재하지 않습니다.")
         else:
-            selected_code = None
-            stock_name = None
-
-            if len(candidates) == 1:
-                selected_code, stock_name = candidates[0]
-            else:
-                selection = st.selectbox("🔎 유사한 종목이 여러 개 발견되었습니다. 선택해주세요:",
-                                         [f"{name} ({code})" for code, name in candidates])
-                selected_code = selection.split('(')[-1].replace(')', '').strip()
-                stock_name = selection.split('(')[0].strip()
-
-            # 마지막 영업일 계산
-            end_date = get_last_trading_day(year)
-            if not end_date:
-                st.warning(f"❌ {year}년의 마지막 영업일을 확인할 수 없습니다.")
-            else:
-                cap_df = stock.get_market_cap_by_date(end_date, end_date, selected_code)
-                if cap_df.empty:
-                    st.warning(f"❌ {year}년 ({end_date}) 기준 데이터가 존재하지 않습니다.")
-                else:
-                    issued_shares = int(cap_df['상장주식수'].values[0])
-                    st.success(f"✅ [{stock_name}] {year}년 기준 발행주식총수")
-                    st.write(f"**{issued_shares:,}주** (조회일 기준: {end_date})")
-
-    except Exception as e:
-        st.error(f"🚫 오류 발생: {e}")
-
+            issued_shares = int(cap_df['상장주식수'].values[0])
+            st.success(f"✅ [{st.session_state.stock_name}] {year}년 기준 발행주식총수")
+            st.write(f"**{issued_shares:,}주** (조회일 기준: {end_date})")
