@@ -19,17 +19,22 @@ report_map = {
     'cash-flow-statement': 'CF'
 }
 
-# ✅ 보고서 추출 함수 (limit 기반으로 안정성 개선)
+# ✅ 보고서 추출 함수 (limit 기반 + 오류 메시지 로깅)
 def fetch_financial_report(ticker, report_type, limit=8):
     for api_key in api_keys:
         url = f"https://financialmodelingprep.com/api/v3/{report_type}/{ticker}?period=quarter&limit={limit}&apikey={api_key}"
         try:
             res = requests.get(url, timeout=10)
+            if res.status_code != 200:
+                st.warning(f"🔒 API 요청 실패 ({report_type}): 상태코드 {res.status_code}")
+                continue
             data = res.json()
             if isinstance(data, list) and len(data) > 0:
                 return pd.DataFrame.from_records(data)
-        except:
-            continue
+            else:
+                st.warning(f"⚠️ API 응답은 정상이나 데이터 없음: {report_type} → {url}")
+        except Exception as e:
+            st.error(f"🚫 요청 중 오류 발생: {e}")
     return pd.DataFrame()
 
 # ✅ Streamlit UI 시작
@@ -65,4 +70,5 @@ if st.button("📥 재무제표 가져오기"):
             buffer.seek(0)
             st.download_button("⬇️ 엑셀 다운로드", buffer, file_name=f"{ticker}_재무제표_{timestamp}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     else:
-        st.error("❌ 모든 보고서 요청 실패. API Key 제한 혹은 티커 오류일 수 있습니다.")
+        st.error("❌ 모든 보고서 요청 실패. API Key 제한, 티커 오류, 혹은 데이터가 존재하지 않을 수 있습니다.")
+
