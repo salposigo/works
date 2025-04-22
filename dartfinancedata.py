@@ -37,17 +37,20 @@ def get_report_list(corp_code, bgn_de, end_de, report_tp):
     res = requests.get(url)
     return res.json()
 
-# ✅ XBRL 데이터 조회 함수
-def get_xbrl_financials(rcept_no):
-    url = f"https://opendart.fss.or.kr/api/fnlttSinglAcntAll.json?crtfc_key={API_KEY}&rcept_no={rcept_no}&fs_div=CFS"
-    res = requests.get(url)
-    if res.status_code == 200 and res.json().get("status") == "000":
-        return pd.DataFrame(res.json()['list'])
-    return pd.DataFrame()
+# ✅ XBRL 데이터 조회 함수 (CFS → OFS fallback)
+def get_xbrl_financials_with_fallback(rcept_no):
+    for fs_div in ['CFS', 'OFS']:
+        url = f"https://opendart.fss.or.kr/api/fnlttSinglAcntAll.json?crtfc_key={API_KEY}&rcept_no={rcept_no}&fs_div={fs_div}"
+        res = requests.get(url)
+        if res.status_code == 200 and res.json().get("status") == "000":
+            df = pd.DataFrame(res.json()['list'])
+            if not df.empty:
+                return df, fs_div
+    return pd.DataFrame(), None
 
 # ✅ Streamlit UI 시작
 st.set_page_config(page_title="📊 오픈DART 재무제표 조회기", layout="wide")
-st.title("📊 오픈 DART API 기반 연결 재무제표 직접 조회")
+st.title("📊 오픈 DART API 기반 연결/별도 재무제표 직접 조회")
 
 # 날짜 범위 선택
 today = datetime.date.today()
@@ -110,13 +113,16 @@ if st.session_state.selected_corp is not None:
         rcept_no = report_df[report_df['report_nm'] + " / " + report_df['rcept_dt'] == selected_rcept]['rcept_no'].values[0]
 
         with st.spinner("📊 재무제표 불러오는 중..."):
-            fs_df = get_xbrl_financials(rcept_no)
+            fs_df, fs_type = get_xbrl_financials_with_fallback(rcept_no)
 
         if fs_df.empty:
-            st.error("❌ XBRL 기반 연결 재무제표 데이터가 존재하지 않습니다.")
+            st.error("❌ 연결(CFS) 또는 별도(OFS) 재무제표 데이터가 존재하지 않습니다.")
         else:
-            st.success("📈 연결 재무제표 데이터:")
+            st.success(f"📈 조회된 재무제표 유형: {fs_type}")
             display_df = fs_df[['fs_nm', 'sj_nm', 'account_nm', 'thstrm_amount']].rename(columns={
                 'fs_nm': '재무제표명', 'sj_nm': '재무제표구분', 'account_nm': '계정명', 'thstrm_amount': '당기 금액'
             })
             st.dataframe(display_df, use_container_width=True)
+
+            excel_filename = f"{corp_name}_재무제표_{fs_type}.xlsx"
+            st.download_button("⬇️ 재무제표 Excel 다운로드", data=display_df.to_excel(index=False), file_name=excel_filename)
