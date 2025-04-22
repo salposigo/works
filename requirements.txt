@@ -4,3 +4,7 @@ pandas
 yfinance
 xlsxwriter
 numpy
+os
+requests
+datetime
+io
