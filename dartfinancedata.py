@@ -43,7 +43,6 @@ st.title("📄 오픈 DART API를 통한 공시 보고서 조회")
 
 # 날짜 범위 선택
 today = datetime.date.today()
-def_year = str(today.year - 1)
 start_date = st.date_input("검색 시작일", datetime.date(today.year - 1, 1, 1))
 end_date = st.date_input("검색 종료일", today)
 report_type = st.selectbox("공시유형 선택", options=[("사업보고서", "A001"), ("반기보고서", "A002"), ("분기보고서", "A003")], format_func=lambda x: x[0])
@@ -60,19 +59,25 @@ corp_df = st.session_state.corp_df
 if 'selected_corp' not in st.session_state:
     st.session_state.selected_corp = None
 
-if st.button("🔍 공시자료 조회") or st.session_state.selected_corp:
+# 선택 초기화 버튼
+if st.button("🔄 선택된 기업 초기화"):
+    st.session_state.selected_corp = None
+    st.experimental_rerun()
+
+# 공시자료 조회 트리거
+if st.button("🔍 공시자료 조회") or st.session_state.selected_corp is not None:
     match_df = corp_df[(corp_df['stock_code'] == stock_input) | (corp_df['corp_name'].str.contains(stock_input))]
 
     if match_df.empty:
         st.error("❌ 해당 종목코드 또는 기업명을 찾을 수 없습니다.")
         st.session_state.selected_corp = None
-    elif len(match_df) > 1 and not st.session_state.selected_corp:
+    elif len(match_df) > 1 and st.session_state.selected_corp is None:
         selected_corp_name = st.selectbox("⚠️ 유사한 기업이 여러 개 있습니다. 하나를 선택하세요:", options=match_df['corp_name'].tolist())
         selected_row = match_df[match_df['corp_name'] == selected_corp_name].iloc[0]
         st.session_state.selected_corp = selected_row
-        st.rerun()
+        st.experimental_rerun()
     else:
-        if not st.session_state.selected_corp:
+        if st.session_state.selected_corp is None:
             st.session_state.selected_corp = match_df.iloc[0]
 
         corp_code = st.session_state.selected_corp['corp_code']
