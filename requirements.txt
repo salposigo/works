@@ -6,5 +6,4 @@ xlsxwriter
 numpy
 requests
 datetime
-dart-fss
 zipfile
