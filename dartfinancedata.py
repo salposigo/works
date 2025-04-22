@@ -71,9 +71,10 @@ if run_query:
         st.error("❌ 해당 종목코드 또는 기업명을 찾을 수 없습니다.")
         st.session_state.selected_corp = None
     elif len(match_df) > 1:
-        st.session_state.selected_name = st.selectbox("⚠️ 유사한 기업이 여러 개 있습니다. 하나를 선택하세요:", options=match_df['corp_name'].tolist(), key='selectbox')
-        if st.session_state.selected_name:
-            selected_row = match_df[match_df['corp_name'] == st.session_state.selected_name].iloc[0]
+        selected_name = st.selectbox("⚠️ 유사한 기업이 여러 개 있습니다. 하나를 선택하세요:", options=match_df['corp_name'].tolist(), key='selectbox')
+        confirm = st.button("✅ 선택한 기업으로 조회")
+        if confirm:
+            selected_row = match_df[match_df['corp_name'] == selected_name].iloc[0]
             st.session_state.selected_corp = selected_row
     else:
         st.session_state.selected_corp = match_df.iloc[0]
