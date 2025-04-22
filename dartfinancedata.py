@@ -23,23 +23,27 @@ def load_corp_codes():
                 'corp_name': item.find('corp_name').text,
                 'stock_code': item.find('stock_code').text
             }
-            for item in root.findall('list') if item.find('stock_code').text
+            for item in root.findall('list') if item.find('stock_code') is not None and item.find('stock_code').text
         ]
         return pd.DataFrame(data)
     return pd.DataFrame()
 
-# ✅ 공시 리스트 불러오기
+# ✅ 공시 리스트 불러오기 (xbrl 존재 포함)
 def get_report_list(corp_code, bgn_de, end_de, report_tp):
     url = (
         f"https://opendart.fss.or.kr/api/list.json"
-        f"?crtfc_key={API_KEY}&corp_code={corp_code}&bgn_de={bgn_de}&end_de={end_de}&pblntf_detail_ty={report_tp}"
+        f"?crtfc_key={API_KEY}&corp_code={corp_code}&bgn_de={bgn_de}&end_de={end_de}&pblntf_detail_ty={report_tp}&page_count=100"
     )
     res = requests.get(url)
     return res.json()
 
+# ✅ XBRL 다운로드 링크 생성
+def get_xbrl_download_link(rcept_no):
+    return f"https://opendart.fss.or.kr/api/document.xml?crtfc_key={API_KEY}&rcept_no={rcept_no}"
+
 # ✅ Streamlit UI 시작
-st.set_page_config(page_title="📄 오픈DART 공시 조회기", layout="wide")
-st.title("📄 오픈 DART API를 통한 공시 보고서 조회")
+st.set_page_config(page_title="📄 오픈DART 공시 조회기 (XBRL 포함)", layout="wide")
+st.title("📄 오픈 DART API를 통한 XBRL 재무제표 조회")
 
 # 날짜 범위 선택
 today = datetime.date.today()
@@ -58,26 +62,27 @@ corp_df = st.session_state.corp_df
 # 상태 변수 초기화
 if 'selected_corp' not in st.session_state:
     st.session_state.selected_corp = None
-if 'selected_name' not in st.session_state:
-    st.session_state.selected_name = None
+if 'matched_df' not in st.session_state:
+    st.session_state.matched_df = pd.DataFrame()
+
+# 유사 기업 선택 처리용 변수
+selected_name = None
 
 # 공시자료 조회 트리거
 run_query = st.button("🔍 공시자료 조회")
 
 if run_query:
-    match_df = corp_df[(corp_df['stock_code'] == stock_input) | (corp_df['corp_name'].str.contains(stock_input))]
-
-    if match_df.empty:
+    matched = corp_df[(corp_df['stock_code'] == stock_input) | (corp_df['corp_name'].str.contains(stock_input))]
+    st.session_state.matched_df = matched.copy()
+    if matched.empty:
         st.error("❌ 해당 종목코드 또는 기업명을 찾을 수 없습니다.")
         st.session_state.selected_corp = None
-    elif len(match_df) > 1:
-        selected_name = st.selectbox("⚠️ 유사한 기업이 여러 개 있습니다. 하나를 선택하세요:", options=match_df['corp_name'].tolist(), key='selectbox')
-        confirm = st.button("✅ 선택한 기업으로 조회")
-        if confirm:
-            selected_row = match_df[match_df['corp_name'] == selected_name].iloc[0]
-            st.session_state.selected_corp = selected_row
+    elif len(matched) == 1:
+        st.session_state.selected_corp = matched.iloc[0]
     else:
-        st.session_state.selected_corp = match_df.iloc[0]
+        selected_name = st.selectbox("⚠️ 유사한 기업이 여러 개 있습니다. 하나를 선택하세요:", matched['corp_name'].tolist())
+        if selected_name:
+            st.session_state.selected_corp = matched[matched['corp_name'] == selected_name].iloc[0]
 
 if st.session_state.selected_corp is not None:
     corp_code = st.session_state.selected_corp['corp_code']
@@ -99,9 +104,9 @@ if st.session_state.selected_corp is not None:
         report_df = pd.DataFrame(result['list'])
         report_df = report_df[['rcept_no', 'report_nm', 'rcept_dt', 'flr_nm', 'rm']]
         report_df['접수일'] = pd.to_datetime(report_df['rcept_dt'])
-        report_df['공시링크'] = report_df['rcept_no'].apply(lambda x: f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={x}")
+        report_df['XBRL_XML_링크'] = report_df['rcept_no'].apply(get_xbrl_download_link)
         st.success(f"📄 총 {len(report_df)}건의 보고서가 조회되었습니다.")
-        st.dataframe(report_df[['접수일', 'report_nm', 'flr_nm', '공시링크']], use_container_width=True)
+        st.dataframe(report_df[['접수일', 'report_nm', 'flr_nm', 'XBRL_XML_링크']], use_container_width=True)
 
         csv = report_df.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("⬇️ 보고서 목록 CSV 다운로드", data=csv, file_name=f"{corp_name}_dart_reports.csv")
+        st.download_button("⬇️ 공시 목록 CSV 다운로드 (XBRL 포함)", data=csv, file_name=f"{corp_name}_dart_xbrl_reports.csv")
