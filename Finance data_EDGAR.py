@@ -19,10 +19,10 @@ report_map = {
     'cash-flow-statement': 'CF'
 }
 
-# ✅ 보고서 추출 함수
-def fetch_financial_report(ticker, report_type, from_date, to_date):
+# ✅ 보고서 추출 함수 (limit 기반으로 안정성 개선)
+def fetch_financial_report(ticker, report_type, limit=8):
     for api_key in api_keys:
-        url = f"https://financialmodelingprep.com/api/v3/{report_type}/{ticker}?period=quarter&from={from_date}&to={to_date}&apikey={api_key}"
+        url = f"https://financialmodelingprep.com/api/v3/{report_type}/{ticker}?period=quarter&limit={limit}&apikey={api_key}"
         try:
             res = requests.get(url, timeout=10)
             data = res.json()
@@ -37,22 +37,18 @@ st.set_page_config(page_title="📊 재무제표 추출기", layout="wide")
 st.title("📑 미국 주식 재무제표 다운로드 (FMP API)")
 
 # 사용자 입력 받기
-ticker = st.text_input("종목 티커 입력 (예: AAPL, MSFT, TSLA)", value="AAPL")
-from_date = st.date_input("시작 날짜", value=datetime.date(2021, 1, 1)).strftime("%Y-%m-%d")
-to_date = st.date_input("종료 날짜", value=datetime.date.today()).strftime("%Y-%m-%d")
+ticker = st.text_input("미국 종목 티커 입력 (예: AAPL, MSFT, TSLA)", value="AAPL")
+limit = st.slider("가져올 분기 수 (limit)", min_value=1, max_value=20, value=8)
 
 # 조회 버튼
-download = st.button("📥 재무제표 가져오기")
-
-if download:
+if st.button("📥 재무제표 가져오기"):
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M")
-    zip_buffer = BytesIO()
     results = {}
 
     for report in report_map:
-        df = fetch_financial_report(ticker, report, from_date, to_date)
+        df = fetch_financial_report(ticker, report, limit)
         if not df.empty:
-            results[report_map[report]] = df.T  # 전치해서 가독성 높이기
+            results[report_map[report]] = df.T
         else:
             st.warning(f"⚠️ {report} 데이터 불러오기 실패 또는 데이터 없음.")
 
