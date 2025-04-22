@@ -5,5 +5,3 @@ yfinance
 xlsxwriter
 numpy
 requests
-datetime
-zipfile
