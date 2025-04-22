@@ -56,18 +56,27 @@ if 'corp_df' not in st.session_state:
 
 corp_df = st.session_state.corp_df
 
-if st.button("🔍 공시자료 조회"):
-    # 종목코드 또는 기업명으로 검색
+# 선택된 기업 저장 상태 변수 초기화
+if 'selected_corp' not in st.session_state:
+    st.session_state.selected_corp = None
+
+if st.button("🔍 공시자료 조회") or st.session_state.selected_corp:
     match_df = corp_df[(corp_df['stock_code'] == stock_input) | (corp_df['corp_name'].str.contains(stock_input))]
 
     if match_df.empty:
         st.error("❌ 해당 종목코드 또는 기업명을 찾을 수 없습니다.")
-    elif len(match_df) > 1:
-        st.warning("⚠️ 검색 결과가 여러 건입니다. 좀 더 구체적인 이름을 입력해주세요.")
-        st.dataframe(match_df)
+        st.session_state.selected_corp = None
+    elif len(match_df) > 1 and not st.session_state.selected_corp:
+        selected_corp_name = st.selectbox("⚠️ 유사한 기업이 여러 개 있습니다. 하나를 선택하세요:", options=match_df['corp_name'].tolist())
+        selected_row = match_df[match_df['corp_name'] == selected_corp_name].iloc[0]
+        st.session_state.selected_corp = selected_row
+        st.rerun()
     else:
-        corp_code = match_df.iloc[0]['corp_code']
-        corp_name = match_df.iloc[0]['corp_name']
+        if not st.session_state.selected_corp:
+            st.session_state.selected_corp = match_df.iloc[0]
+
+        corp_code = st.session_state.selected_corp['corp_code']
+        corp_name = st.session_state.selected_corp['corp_name']
         st.info(f"✅ 조회 대상: {corp_name} ({stock_input})")
 
         bgn_de = start_date.strftime('%Y%m%d')
