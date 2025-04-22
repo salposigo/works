@@ -62,10 +62,11 @@ if 'selected_corp' not in st.session_state:
 # 선택 초기화 버튼
 if st.button("🔄 선택된 기업 초기화"):
     st.session_state.selected_corp = None
-    st.experimental_rerun()
 
 # 공시자료 조회 트리거
-if st.button("🔍 공시자료 조회") or st.session_state.selected_corp is not None:
+run_query = st.button("🔍 공시자료 조회")
+
+if run_query or st.session_state.selected_corp is not None:
     match_df = corp_df[(corp_df['stock_code'] == stock_input) | (corp_df['corp_name'].str.contains(stock_input))]
 
     if match_df.empty:
@@ -73,13 +74,13 @@ if st.button("🔍 공시자료 조회") or st.session_state.selected_corp is no
         st.session_state.selected_corp = None
     elif len(match_df) > 1 and st.session_state.selected_corp is None:
         selected_corp_name = st.selectbox("⚠️ 유사한 기업이 여러 개 있습니다. 하나를 선택하세요:", options=match_df['corp_name'].tolist())
-        selected_row = match_df[match_df['corp_name'] == selected_corp_name].iloc[0]
-        st.session_state.selected_corp = selected_row
-        st.experimental_rerun()
-    else:
-        if st.session_state.selected_corp is None:
-            st.session_state.selected_corp = match_df.iloc[0]
+        if st.button("✅ 선택한 기업으로 조회"):
+            selected_row = match_df[match_df['corp_name'] == selected_corp_name].iloc[0]
+            st.session_state.selected_corp = selected_row
+    elif st.session_state.selected_corp is None:
+        st.session_state.selected_corp = match_df.iloc[0]
 
+    if st.session_state.selected_corp is not None:
         corp_code = st.session_state.selected_corp['corp_code']
         corp_name = st.session_state.selected_corp['corp_name']
         st.info(f"✅ 조회 대상: {corp_name} ({stock_input})")
