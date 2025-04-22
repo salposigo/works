@@ -3,3 +3,4 @@ pykrx
 pandas
 yfinance
 xlsxwriter
+numpy
