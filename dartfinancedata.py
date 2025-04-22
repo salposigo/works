@@ -64,26 +64,27 @@ if 'selected_corp' not in st.session_state:
     st.session_state.selected_corp = None
 if 'matched_df' not in st.session_state:
     st.session_state.matched_df = pd.DataFrame()
+if 'selectbox_name' not in st.session_state:
+    st.session_state.selectbox_name = None
 
-# 유사 기업 선택 처리용 변수
-selected_name = None
-
-# 공시자료 조회 트리거
-run_query = st.button("🔍 공시자료 조회")
-
-if run_query:
-    matched = corp_df[(corp_df['stock_code'] == stock_input) | (corp_df['corp_name'].str.contains(stock_input))]
+# 검색 트리거
+matched = corp_df[(corp_df['stock_code'] == stock_input) | (corp_df['corp_name'].str.contains(stock_input))]
+if not matched.empty:
     st.session_state.matched_df = matched.copy()
-    if matched.empty:
-        st.error("❌ 해당 종목코드 또는 기업명을 찾을 수 없습니다.")
-        st.session_state.selected_corp = None
-    elif len(matched) == 1:
-        st.session_state.selected_corp = matched.iloc[0]
-    else:
-        selected_name = st.selectbox("⚠️ 유사한 기업이 여러 개 있습니다. 하나를 선택하세요:", matched['corp_name'].tolist())
-        if selected_name:
-            st.session_state.selected_corp = matched[matched['corp_name'] == selected_name].iloc[0]
 
+# 유사 기업 선택
+if len(st.session_state.matched_df) > 1:
+    st.session_state.selectbox_name = st.selectbox("⚠️ 유사한 기업이 여러 개 있습니다. 하나를 선택하세요:", st.session_state.matched_df['corp_name'].tolist())
+
+# 공시자료 조회 버튼
+if st.button("🔍 공시자료 조회"):
+    if len(st.session_state.matched_df) == 1:
+        st.session_state.selected_corp = st.session_state.matched_df.iloc[0]
+    elif st.session_state.selectbox_name:
+        selected_row = st.session_state.matched_df[st.session_state.matched_df['corp_name'] == st.session_state.selectbox_name].iloc[0]
+        st.session_state.selected_corp = selected_row
+
+# 공시 결과 출력
 if st.session_state.selected_corp is not None:
     corp_code = st.session_state.selected_corp['corp_code']
     corp_name = st.session_state.selected_corp['corp_name']
